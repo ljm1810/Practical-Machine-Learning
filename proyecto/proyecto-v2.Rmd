@@ -1,0 +1,104 @@
+---
+title: "Proyecto Aprendizaje Automatico en la Practica"
+author: "Pachamaltese"
+date: "May 31, 2015"
+output: html_document
+---
+
+##Reading and Cleaning Data
+
+Read both training and testing instances. I have used a function named LOAD to load the packages that I will use later.
+```{r}
+setwd("/Users/pacha/Documents/Coursera/tareas y controles/Practical Machine Learning/proyecto")
+
+load <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE)
+} 
+
+packages <- c("data.table", "Hmisc", "caret", "randomForest", "foreach", "doParallel", "rattle")
+load(packages)
+
+training_data <- read.csv("pml-training.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+evaluation_data <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+```
+
+I need to drop columns with NAs, drop highly correlated variables and drop variables with 0 (or approx to 0) variance. 
+
+The next chunk will be included to do the calculations but the results are not displayed, or the report would be too long:
+```{r, results = 'hide'}
+str(training_data)
+cleantraining <- training_data[, -which(names(training_data) %in% c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"))]
+cleantraining = cleantraining[, colSums(is.na(cleantraining)) == 0] #this drops columns with NAs
+zerovariance =nearZeroVar(cleantraining[sapply(cleantraining, is.numeric)], saveMetrics=TRUE)
+cleantraining = cleantraining[, zerovariance[, 'nzv'] == 0] #to remove 0 or near to 0 variance variables
+correlationmatrix <- cor(na.omit(cleantraining[sapply(cleantraining, is.numeric)]))
+dim(correlationmatrix)
+correlationmatrixdegreesoffreedom <- expand.grid(row = 1:52, col = 1:52)
+correlationmatrixdegreesoffreedom$correlation <- as.vector(correlationmatrix) #this returns the correlation matrix in matrix format
+removehighcorrelation <- findCorrelation(correlationmatrix, cutoff = .7, verbose = TRUE)
+cleantraining = cleantraining[, -removehighcorrelation] #this removes highly correlated variables (in psychometric theory .7+ correlation is a high correlation)
+
+training_data <- cleantraining
+
+for(i in c(8:ncol(training_data)-1)) {training_data[,i] = as.numeric(as.character(training_data[,i]))}
+
+for(i in c(8:ncol(evaluation_data)-1)) {evaluation_data[,i] = as.numeric(as.character(evaluation_data[,i]))} #Some columns were blank, hence are dropped. I will use a set that only includes complete columns. I also remove user name, timestamps and windows to have a light data set.
+
+feature_set <- colnames(training_data[colSums(is.na(training_data)) == 0])[-(1:7)]
+model_data <- training_data[feature_set]
+feature_set #now we have the model data built from our feature set.
+```
+##Cross-Validation
+
+I need to split the sample in two samples. This is to divide training and testing for cross-validation.
+```{r}
+idx <- createDataPartition(y=model_data$classe, p=0.6, list=FALSE )
+training <- model_data[idx,]
+testing <- model_data[-idx,]
+
+registerDoParallel()
+x <- training[-ncol(training)]
+y <- training$classe #After cleaning I use the 70-30 usual proportion of training-testing.
+```
+
+##Analysis
+
+Here I define the random forest and the matrix to obtain the answers.
+```{r}
+set.seed(33) #(can be any number, this is to guarantee reproducibility)
+rf <- foreach(ntree=rep(10, 5), .combine=randomForest::combine, .packages='randomForest') %dopar% {
+  randomForest(x, y, ntree=ntree) 
+}
+
+predictions1 <- predict(rf, newdata=training)
+confusionMatrix(predictions1,training$classe)
+
+predictions2 <- predict(rf, newdata=testing)
+confusionMatrix(predictions2,testing$classe)
+```
+
+##Answers
+
+This was not created by me. This is the function that appeared to submit the answers.
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+x <- evaluation_data
+x <- x[feature_set[feature_set!='classe']]
+answers <- predict(rf, newdata=x)
+
+answers
+
+pml_write_files(answers)
+```
+
+
