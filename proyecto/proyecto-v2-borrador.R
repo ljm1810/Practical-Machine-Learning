@@ -1,6 +1,9 @@
+#Reading and Cleaning Data
+#Read both training and testing instances. I have used a function named LOAD to load the packages that I will use later.
+
 setwd("/Users/pacha/Documents/Coursera/tareas y controles/Practical Machine Learning/proyecto")
 
-ipak <- function(pkg){
+load <- function(pkg){
   new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
   if (length(new.pkg))
     install.packages(new.pkg, dependencies = TRUE)
@@ -8,10 +11,12 @@ ipak <- function(pkg){
 } 
 
 packages <- c("data.table", "Hmisc", "caret", "randomForest", "foreach", "doParallel", "rattle")
-ipak(packages)
+load(packages)
 
 training_data <- read.csv("pml-training.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
 evaluation_data <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+
+#I need to drop columns with NAs, drop highly correlated variables and drop variables with 0 (or approx to 0) variance. 
 
 str(training_data)
 cleantraining <- training_data[, -which(names(training_data) %in% c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"))]
@@ -29,11 +34,14 @@ training_data <- cleantraining
 
 for(i in c(8:ncol(training_data)-1)) {training_data[,i] = as.numeric(as.character(training_data[,i]))}
 
-for(i in c(8:ncol(evaluation_data)-1)) {evaluation_data[,i] = as.numeric(as.character(evaluation_data[,i]))} #some columns were mostly blank. These did not contribute well to the prediction. I chose a feature set that only included complete columns. We also remove user name, timestamps and windows.
+for(i in c(8:ncol(evaluation_data)-1)) {evaluation_data[,i] = as.numeric(as.character(evaluation_data[,i]))} #Some columns were blank, hence are dropped. I will use a set that only includes complete columns. I also remove user name, timestamps and windows to have a light data set.
 
 feature_set <- colnames(training_data[colSums(is.na(training_data)) == 0])[-(1:7)]
 model_data <- training_data[feature_set]
 feature_set #now we have the model data built from our feature set.
+
+##Cross-Validation
+#I need to split the sample in two samples. This is to divide training and testing for cross-validation.
 
 idx <- createDataPartition(y=model_data$classe, p=0.6, list=FALSE )
 training <- model_data[idx,]
@@ -41,10 +49,12 @@ testing <- model_data[-idx,]
 
 registerDoParallel()
 x <- training[-ncol(training)]
-y <- training$classe
+y <- training$classe #After cleaning I use the 70-30 usual proportion of training-testing.
 
-set.seed(33)
+#Analysis
+#Here I define the random forest and the matrix to obtain the answers.
 
+set.seed(33) #(can be any number, this is to guarantee reproducibility)
 rf <- foreach(ntree=rep(10, 5), .combine=randomForest::combine, .packages='randomForest') %dopar% {
   randomForest(x, y, ntree=ntree) 
 }
@@ -54,6 +64,9 @@ confusionMatrix(predictions1,training$classe)
 
 predictions2 <- predict(rf, newdata=testing)
 confusionMatrix(predictions2,testing$classe)
+
+#Answers
+#This was not created by me. This is the function that appeared to submit the answers.
 
 pml_write_files = function(x){
   n = length(x)
