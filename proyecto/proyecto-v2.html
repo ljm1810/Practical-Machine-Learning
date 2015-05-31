@@ -124,25 +124,30 @@ evaluation_data &lt;- read.csv(&quot;pml-testing.csv&quot;, na.strings=c(&quot;#
 <p>The next chunk will be included to do the calculations but the results are not displayed, or the report would be too long:</p>
 <pre class="r"><code>str(training_data)
 cleantraining &lt;- training_data[, -which(names(training_data) %in% c(&quot;X&quot;, &quot;user_name&quot;, &quot;raw_timestamp_part_1&quot;, &quot;raw_timestamp_part_2&quot;, &quot;cvtd_timestamp&quot;, &quot;new_window&quot;, &quot;num_window&quot;))]
-cleantraining = cleantraining[, colSums(is.na(cleantraining)) == 0] #this drops columns with NAs
+#this drops columns with NAs
+cleantraining = cleantraining[, colSums(is.na(cleantraining)) == 0] 
 zerovariance =nearZeroVar(cleantraining[sapply(cleantraining, is.numeric)], saveMetrics=TRUE)
-cleantraining = cleantraining[, zerovariance[, 'nzv'] == 0] #to remove 0 or near to 0 variance variables
+#to remove 0 or near to 0 variance variables
+cleantraining = cleantraining[, zerovariance[, 'nzv'] == 0] 
 correlationmatrix &lt;- cor(na.omit(cleantraining[sapply(cleantraining, is.numeric)]))
 dim(correlationmatrix)
 correlationmatrixdegreesoffreedom &lt;- expand.grid(row = 1:52, col = 1:52)
-correlationmatrixdegreesoffreedom$correlation &lt;- as.vector(correlationmatrix) #this returns the correlation matrix in matrix format
+#this returns the correlation matrix in matrix format
+correlationmatrixdegreesoffreedom$correlation &lt;- as.vector(correlationmatrix) 
 removehighcorrelation &lt;- findCorrelation(correlationmatrix, cutoff = .7, verbose = TRUE)
-cleantraining = cleantraining[, -removehighcorrelation] #this removes highly correlated variables (in psychometric theory .7+ correlation is a high correlation)
+#this removes highly correlated variables (in psychometric theory .7+ correlation is a high correlation)
+cleantraining = cleantraining[, -removehighcorrelation] 
 
 training_data &lt;- cleantraining
 
 for(i in c(8:ncol(training_data)-1)) {training_data[,i] = as.numeric(as.character(training_data[,i]))}
-
-for(i in c(8:ncol(evaluation_data)-1)) {evaluation_data[,i] = as.numeric(as.character(evaluation_data[,i]))} #Some columns were blank, hence are dropped. I will use a set that only includes complete columns. I also remove user name, timestamps and windows to have a light data set.
+#Some columns were blank, hence are dropped. I will use a set that only includes complete columns. I also remove user name, timestamps and windows to have a light data set.
+for(i in c(8:ncol(evaluation_data)-1)) {evaluation_data[,i] = as.numeric(as.character(evaluation_data[,i]))} 
 
 feature_set &lt;- colnames(training_data[colSums(is.na(training_data)) == 0])[-(1:7)]
 model_data &lt;- training_data[feature_set]
-feature_set #now we have the model data built from our feature set.</code></pre>
+#now we have the model data built from our feature set.
+feature_set </code></pre>
 </div>
 <div id="cross-validation" class="section level2">
 <h2>Cross-Validation</h2>
@@ -153,12 +158,14 @@ testing &lt;- model_data[-idx,]
 
 registerDoParallel()
 x &lt;- training[-ncol(training)]
-y &lt;- training$classe #After cleaning I use the 70-30 usual proportion of training-testing.</code></pre>
+#After cleaning I use the 70-30 usual proportion of training-testing.
+y &lt;- training$classe </code></pre>
 </div>
 <div id="analysis" class="section level2">
 <h2>Analysis</h2>
 <p>Here I define the random forest and the matrix to obtain the answers.</p>
-<pre class="r"><code>set.seed(33) #(can be any number, this is to guarantee reproducibility)
+<pre class="r"><code>#The seed can be any number, this is to guarantee reproducibility
+set.seed(33) 
 rf &lt;- foreach(ntree=rep(10, 5), .combine=randomForest::combine, .packages='randomForest') %dopar% {
   randomForest(x, y, ntree=ntree) 
 }
@@ -202,33 +209,33 @@ confusionMatrix(predictions2,testing$classe)</code></pre>
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 2218   41    6    0    1
-##          B    8 1460   20    0   17
-##          C    2   13 1330   59    1
-##          D    3    2    9 1210   20
-##          E    1    2    3   17 1403
+##          A 2220   47    0    3    1
+##          B    7 1455   32    0   29
+##          C    2   10 1317   51    9
+##          D    1    1   14 1222   15
+##          E    2    5    5   10 1388
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.9713          
-##                  95% CI : (0.9674, 0.9749)
+##                Accuracy : 0.9689          
+##                  95% CI : (0.9648, 0.9726)
 ##     No Information Rate : 0.2845          
-##     P-Value [Acc &gt; NIR] : &lt; 2e-16         
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
 ##                                           
-##                   Kappa : 0.9637          
-##  Mcnemar's Test P-Value : 3.9e-13         
+##                   Kappa : 0.9606          
+##  Mcnemar's Test P-Value : 3.916e-14       
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9937   0.9618   0.9722   0.9409   0.9730
-## Specificity            0.9914   0.9929   0.9884   0.9948   0.9964
-## Pos Pred Value         0.9788   0.9701   0.9466   0.9727   0.9839
-## Neg Pred Value         0.9975   0.9909   0.9941   0.9885   0.9939
+## Sensitivity            0.9946   0.9585   0.9627   0.9502   0.9626
+## Specificity            0.9909   0.9893   0.9889   0.9953   0.9966
+## Pos Pred Value         0.9775   0.9554   0.9482   0.9753   0.9844
+## Neg Pred Value         0.9978   0.9900   0.9921   0.9903   0.9916
 ## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2827   0.1861   0.1695   0.1542   0.1788
-## Detection Prevalence   0.2888   0.1918   0.1791   0.1586   0.1817
-## Balanced Accuracy      0.9926   0.9773   0.9803   0.9679   0.9847</code></pre>
+## Detection Rate         0.2829   0.1854   0.1679   0.1557   0.1769
+## Detection Prevalence   0.2894   0.1941   0.1770   0.1597   0.1797
+## Balanced Accuracy      0.9928   0.9739   0.9758   0.9728   0.9796</code></pre>
 </div>
 <div id="answers" class="section level2">
 <h2>Answers</h2>
