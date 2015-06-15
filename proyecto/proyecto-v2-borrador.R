@@ -13,13 +13,13 @@ load <- function(pkg){
 packages <- c("data.table", "caret", "randomForest", "foreach", "rpart", "rpart.plot", "corrplot")
 load(packages)
 
-training <- read.csv("pml-training.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
-evaluation <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+training_data <- read.csv("pml-training.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+testing_data <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
 
 #I need to drop columns with NAs, drop highly correlated variables and drop variables with 0 (or approx to 0) variance. 
 
 str(training)
-cleantraining <- training[, -which(names(training) %in% c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"))]
+cleantraining <- training_data[, -which(names(training_data) %in% c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"))]
 cleantraining = cleantraining[, colSums(is.na(cleantraining)) == 0] #this drops columns with NAs
 zerovariance =nearZeroVar(cleantraining[sapply(cleantraining, is.numeric)], saveMetrics=TRUE)
 cleantraining = cleantraining[, zerovariance[, 'nzv'] == 0] #to remove 0 or near to 0 variance variables
@@ -32,7 +32,7 @@ cleantraining <- cleantraining[, -removehighcorrelation] #this removes highly co
 
 for(i in c(8:ncol(cleantraining)-1)) {cleantraining[,i] = as.numeric(as.character(cleantraining[,i]))}
 
-for(i in c(8:ncol(evaluation)-1)) {evaluation[,i] = as.numeric(as.character(evaluation[,i]))} #Some columns were blank, hence are dropped. I will use a set that only includes complete columns. I also remove user name, timestamps and windows to have a light data set.
+for(i in c(8:ncol(testing_data)-1)) {testing_data[,i] = as.numeric(as.character(testing_data[,i]))} #Some columns were blank, hence are dropped. I will use a set that only includes complete columns. I also remove user name, timestamps and windows to have a light data set.
 
 featureset <- colnames(cleantraining[colSums(is.na(cleantraining)) == 0])[-(1:7)]
 modeldata <- cleantraining[featureset]
@@ -42,7 +42,7 @@ featureset #now we have the model data built from our feature set.
 #I need to split the sample in two samples. This is to divide training and testing for cross-validation.
 
 idx <- createDataPartition(y=modeldata$classe, p=0.6, list=FALSE )
-cleantraining <- modeldata[idx,]
+training <- modeldata[idx,]
 testing <- modeldata[-idx,]
 
 control <- trainControl(method="cv", 5)
@@ -58,9 +58,6 @@ accuracy
 result <- predict(model, training[, -length(names(training))])
 result
 
-corrPlot <- cor(cleantraining[, -length(names(cleantraining))])
-corrplot(corrPlot, method="color")
-
 treeModel <- rpart(classe ~ ., data=cleantraining, method="class")
 prp(treeModel) 
 
@@ -74,8 +71,8 @@ pml_write_files = function(x){
   }
 }
 
-answers <- predict(model, newdata=x[featureset[featureset!='classe']])
-
+testing_data <- testing_data[featureset[featureset!='classe']]
+answers <- predict(model, newdata=testing_data)
 answers
 
 pml_write_files(answers)
