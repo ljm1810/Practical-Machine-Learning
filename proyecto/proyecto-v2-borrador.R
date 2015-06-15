@@ -10,16 +10,16 @@ load <- function(pkg){
   sapply(pkg, require, character.only = TRUE)
 } 
 
-packages <- c("data.table", "Hmisc", "caret", "randomForest", "foreach", "doParallel", "rattle")
+packages <- c("data.table", "caret", "randomForest", "foreach", "rpart", "rpart.plot", "corrplot")
 load(packages)
 
-training_data <- read.csv("pml-training.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
-evaluation_data <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+training <- read.csv("pml-training.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
+evaluation <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!"," ", "", "NA", "NAs", "NULL"))
 
 #I need to drop columns with NAs, drop highly correlated variables and drop variables with 0 (or approx to 0) variance. 
 
-str(training_data)
-cleantraining <- training_data[, -which(names(training_data) %in% c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"))]
+str(training)
+cleantraining <- training[, -which(names(training) %in% c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"))]
 cleantraining = cleantraining[, colSums(is.na(cleantraining)) == 0] #this drops columns with NAs
 zerovariance =nearZeroVar(cleantraining[sapply(cleantraining, is.numeric)], saveMetrics=TRUE)
 cleantraining = cleantraining[, zerovariance[, 'nzv'] == 0] #to remove 0 or near to 0 variance variables
@@ -28,45 +28,43 @@ dim(correlationmatrix)
 correlationmatrixdegreesoffreedom <- expand.grid(row = 1:52, col = 1:52)
 correlationmatrixdegreesoffreedom$correlation <- as.vector(correlationmatrix) #this returns the correlation matrix in matrix format
 removehighcorrelation <- findCorrelation(correlationmatrix, cutoff = .7, verbose = TRUE)
-cleantraining = cleantraining[, -removehighcorrelation] #this removes highly correlated variables (in psychometric theory .7+ correlation is a high correlation)
+cleantraining <- cleantraining[, -removehighcorrelation] #this removes highly correlated variables (in psychometric theory .7+ correlation is a high correlation)
 
-training_data <- cleantraining
+for(i in c(8:ncol(cleantraining)-1)) {cleantraining[,i] = as.numeric(as.character(cleantraining[,i]))}
 
-for(i in c(8:ncol(training_data)-1)) {training_data[,i] = as.numeric(as.character(training_data[,i]))}
+for(i in c(8:ncol(evaluation)-1)) {evaluation[,i] = as.numeric(as.character(evaluation[,i]))} #Some columns were blank, hence are dropped. I will use a set that only includes complete columns. I also remove user name, timestamps and windows to have a light data set.
 
-for(i in c(8:ncol(evaluation_data)-1)) {evaluation_data[,i] = as.numeric(as.character(evaluation_data[,i]))} #Some columns were blank, hence are dropped. I will use a set that only includes complete columns. I also remove user name, timestamps and windows to have a light data set.
-
-feature_set <- colnames(training_data[colSums(is.na(training_data)) == 0])[-(1:7)]
-model_data <- training_data[feature_set]
-feature_set #now we have the model data built from our feature set.
+featureset <- colnames(cleantraining[colSums(is.na(cleantraining)) == 0])[-(1:7)]
+modeldata <- cleantraining[featureset]
+featureset #now we have the model data built from our feature set.
 
 ##Cross-Validation
 #I need to split the sample in two samples. This is to divide training and testing for cross-validation.
 
-idx <- createDataPartition(y=model_data$classe, p=0.6, list=FALSE )
-training <- model_data[idx,]
-testing <- model_data[-idx,]
+idx <- createDataPartition(y=modeldata$classe, p=0.6, list=FALSE )
+cleantraining <- modeldata[idx,]
+testing <- modeldata[-idx,]
 
-registerDoParallel()
-x <- training[-ncol(training)]
-y <- training$classe #After cleaning I use the 70-30 usual proportion of training-testing.
+control <- trainControl(method="cv", 5)
+model <- train(classe ~ ., data=training, method="rf", trControl=control, ntree=250)
+model
 
-#Analysis
-#Here I define the random forest and the matrix to obtain the answers.
+predict <- predict(model, testing)
+confusionMatrix(testing$classe, predict)
 
-set.seed(33) #(can be any number, this is to guarantee reproducibility)
-rf <- foreach(ntree=rep(10, 5), .combine=randomForest::combine, .packages='randomForest') %dopar% {
-  randomForest(x, y, ntree=ntree) 
-}
+accuracy <- postResample(predict, testing$classe)
+accuracy
 
-predictions1 <- predict(rf, newdata=training)
-confusionMatrix(predictions1,training$classe)
+result <- predict(model, training[, -length(names(training))])
+result
 
-predictions2 <- predict(rf, newdata=testing)
-confusionMatrix(predictions2,testing$classe)
+corrPlot <- cor(cleantraining[, -length(names(cleantraining))])
+corrplot(corrPlot, method="color")
 
-#Answers
-#This was not created by me. This is the function that appeared to submit the answers.
+treeModel <- rpart(classe ~ ., data=cleantraining, method="class")
+prp(treeModel) 
+
+##############################
 
 pml_write_files = function(x){
   n = length(x)
@@ -76,9 +74,7 @@ pml_write_files = function(x){
   }
 }
 
-x <- evaluation_data
-x <- x[feature_set[feature_set!='classe']]
-answers <- predict(rf, newdata=x)
+answers <- predict(model, newdata=x[featureset[featureset!='classe']])
 
 answers
 
