@@ -54,7 +54,7 @@ featureset #now we have the model data built from our feature set.
 ## Model
 * I need to split the sample in two samples. 60% for training and 40% for testing is the usual.
 ```{r}
-idx <- createDataPartition(y=modeldata$classe, p=0.6, list=FALSE )
+idx <- createDataPartition(modeldata$classe, p=0.6, list=FALSE )
 training <- modeldata[idx,]
 testing <- modeldata[-idx,]
 ```

@@ -41,7 +41,7 @@ featureset #now we have the model data built from our feature set.
 ##Cross-Validation
 #I need to split the sample in two samples. This is to divide training and testing for cross-validation.
 
-idx <- createDataPartition(y=modeldata$classe, p=0.6, list=FALSE )
+idx <- createDataPartition(modeldata$classe, p=0.6, list=FALSE )
 training <- modeldata[idx,]
 testing <- modeldata[-idx,]
 
